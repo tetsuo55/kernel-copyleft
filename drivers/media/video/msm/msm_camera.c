@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, 2015 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -280,10 +280,11 @@ static int check_overlap(struct hlist_head *ptype,
 static int check_pmem_info(struct msm_pmem_info *info, int len)
 {
 	if (info->offset < len &&
-	    info->offset + info->len <= len &&
-	    info->planar0_off < len &&
-	    info->planar1_off < len &&
-	    info->planar2_off < len)
+		info->offset <= (UINT_MAX - info->len) &&
+		info->offset + info->len <= len &&
+		info->planar0_off < len &&
+		info->planar1_off < len &&
+		info->planar2_off < len)
 		return 0;
 
 	pr_err("%s: check failed: off %d len %d y 0x%x cbcr_p1 0x%x p2_add 0x%x(total len %d)\n",
@@ -2485,6 +2486,7 @@ static int msm_set_crop(struct msm_sync *sync, void __user *arg)
 		ERR_COPY_FROM_USER();
 		sync->croplen = 0;
 		kfree(sync->cropinfo);
+		sync->cropinfo = NULL;
 		mutex_unlock(&sync->lock);
 		return -EFAULT;
 	}

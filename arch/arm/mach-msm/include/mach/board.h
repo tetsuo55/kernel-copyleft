@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/include/mach/board.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * Author: Brian Swetland <swetland@google.com>
@@ -29,6 +29,20 @@
 #include <linux/of_platform.h>
 #include <linux/msm_ssbi.h>
 #include <mach/msm_bus.h>
+
+#ifdef CONFIG_BOOT_TIME_MARKER
+#include "../mach-msm/timer.h"
+#include <linux/proc_fs.h>
+#include <asm/uaccess.h>
+#define TIMER_KHZ 32768
+
+int init_marker_sys_fs(void);
+void place_marker(char *name);
+extern char lk_splash_val[];
+extern unsigned long kernel_start_marker;
+#else
+void place_marker(char *name);
+#endif
 
 struct msm_camera_io_ext {
 	uint32_t mdcphy;
@@ -66,6 +80,10 @@ struct msm_camera_device_platform_data {
 	uint8_t csid_core;
 	uint8_t is_vpe;
 	struct msm_bus_scale_pdata *cam_bus_scale_table;
+};
+
+struct msm_adp_camera_platform_data {
+	bool is_csi_shared;
 };
 
 #ifdef CONFIG_SENSORS_MT9T013
@@ -279,6 +297,7 @@ struct msm_camera_sensor_info {
 	struct msm_actuator_info *actuator_info;
 	int pmic_gpio_enable;
 	struct msm_eeprom_info *eeprom_info;
+	int ba_idx;
 };
 
 struct msm_camera_board_info {
@@ -403,9 +422,7 @@ struct msm_panel_common_pdata {
 	u32 ov0_wb_size;  /* overlay0 writeback size */
 	u32 ov1_wb_size;  /* overlay1 writeback size */
 	u32 mem_hid;
-	char cont_splash_enabled;
-	u32 splash_screen_addr;
-	u32 splash_screen_size;
+	int cont_splash_enabled;
 	char mdp_iommu_split_domain;
 };
 
@@ -419,6 +436,7 @@ struct lcdc_platform_data {
 	struct msm_bus_scale_pdata *bus_scale_table;
 #endif
 	int (*lvds_pixel_remap)(void);
+	bool (*is_automotive_board)(void);
 };
 
 struct tvenc_platform_data {
@@ -469,6 +487,19 @@ struct mipi_dsi_panel_platform_data {
 	void (*gpio_set_backlight)(int bl_level);
 };
 
+struct ds90uh92x_platform_data {
+	char chip_id[20];
+	u32 instance_id;
+	int reset_gpio;
+	int irq_gpio;
+	u32 slave_addr;
+};
+
+struct lvds_fpdl3_platform_data {
+	char chip_id[20];
+	u32 instance_id;
+};
+
 struct lvds_panel_platform_data {
 	int *gpio;
 };
@@ -477,14 +508,30 @@ struct msm_wfd_platform_data {
 	char (*wfd_check_mdp_iommu_split)(void);
 };
 
+struct mipi_dsi_i2c_platform_data {
+	int pd_gpio;
+};
+
+struct lsm330_acc_pdata {
+	int gpio_int1;
+	int gpio_int2;
+};
+
+struct platform_disp_info {
+	u32 id;
+	u32 dest;
+};
+
 #define PANEL_NAME_MAX_LEN 50
 struct msm_fb_platform_data {
-	int (*detect_client)(const char *name);
+	int (*detect_client)(const char *name, struct platform_disp_info
+			     *disp_info);
 	int mddi_prescan;
 	unsigned char ext_resolution;
 	int (*allow_set_offset)(void);
 	char prim_panel_name[PANEL_NAME_MAX_LEN];
 	char ext_panel_name[PANEL_NAME_MAX_LEN];
+	char sec_panel_name[PANEL_NAME_MAX_LEN];
 };
 
 struct msm_hdmi_platform_data {
@@ -500,6 +547,7 @@ struct msm_hdmi_platform_data {
 	int (*init_irq)(void);
 	bool (*check_hdcp_hw_support)(void);
 	bool (*source)(void);
+	bool (*splash_is_enabled)(void);
 	bool is_mhl_enabled;
 };
 

@@ -551,9 +551,6 @@ DECLARE_PER_CPU(int, sd_llc_id);
 static inline struct task_group *task_group(struct task_struct *p)
 {
 	return p->sched_task_group;
-}
-
-static inline bool task_notify_on_migrate(struct task_struct *p)
 {
 	return task_group(p)->notify_on_migrate;
 }
@@ -883,7 +880,7 @@ extern void resched_cpu(int cpu);
 extern struct rt_bandwidth def_rt_bandwidth;
 extern void init_rt_bandwidth(struct rt_bandwidth *rt_b, u64 period, u64 runtime);
 
-extern void update_cpu_load(struct rq *this_rq);
+extern void update_idle_cpu_load(struct rq *this_rq);
 
 #ifdef CONFIG_CGROUP_CPUACCT
 #include <linux/cgroup.h>
@@ -948,8 +945,6 @@ static inline u64 sched_avg_period(void)
 {
 	return (u64)sysctl_sched_time_avg * NSEC_PER_MSEC / 2;
 }
-
-void calc_load_account_idle(struct rq *this_rq);
 
 #ifdef CONFIG_SCHED_HRTICK
 
@@ -1153,7 +1148,8 @@ extern void print_rt_stats(struct seq_file *m, int cpu);
 extern void init_cfs_rq(struct cfs_rq *cfs_rq);
 extern void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq);
 
-extern void account_cfs_bandwidth_used(int enabled, int was_enabled);
+extern void cfs_bandwidth_usage_inc(void);
+extern void cfs_bandwidth_usage_dec(void);
 
 #ifdef CONFIG_NO_HZ
 enum rq_nohz_flag_bits {

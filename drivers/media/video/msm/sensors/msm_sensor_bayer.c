@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,6 +15,8 @@
 #include "msm_ispif.h"
 #include "msm_camera_i2c_mux.h"
 #include "msm_camera_i2c.h"
+
+#define I2C_SEQ_REG_DATA_MAX    256
 /*=============================================================*/
 
 long msm_sensor_bayer_subdev_ioctl(struct v4l2_subdev *sd,
@@ -83,6 +85,14 @@ int32_t msm_sensor_bayer_config(struct msm_sensor_ctrl_t *s_ctrl,
 			break;
 		}
 
+		if (!conf_array.size ||
+			conf_array.size > I2C_SEQ_REG_DATA_MAX) {
+
+			pr_err("%s:%d failed\n", __func__, __LINE__);
+			rc = -EFAULT;
+			break;
+		}
+
 		regs = kzalloc(conf_array.size * sizeof(
 			struct msm_camera_i2c_reg_array),
 			GFP_KERNEL);
@@ -118,6 +128,14 @@ int32_t msm_sensor_bayer_config(struct msm_sensor_ctrl_t *s_ctrl,
 				pr_err("%s:%d failed\n", __func__, __LINE__);
 				rc = -EFAULT;
 				break;
+		}
+
+		if (!conf_array.size ||
+			conf_array.size > I2C_SEQ_REG_DATA_MAX) {
+
+			pr_err("%s:%d failed\n", __func__, __LINE__);
+			rc = -EFAULT;
+			break;
 		}
 
 		regs = kzalloc(conf_array.size * sizeof(
@@ -173,11 +191,13 @@ int32_t msm_sensor_bayer_config(struct msm_sensor_ctrl_t *s_ctrl,
 			(void *)cdata.cfg.setting,
 			sizeof(struct msm_cam_gpio_operation))) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
+			rc = -EFAULT;
+			break;
 		}
 		switch (gop.op_type) {
 		case GPIO_GET_VALUE:
 			gop.value = gpio_get_value(gop.address);
-			if (copy_from_user((void *)cdata.cfg.setting,
+			if (copy_to_user((void *)cdata.cfg.setting,
 				&gop,
 				sizeof(struct msm_cam_gpio_operation))) {
 				pr_err("%s:%d failed\n", __func__, __LINE__);
@@ -251,7 +271,7 @@ int32_t msm_sensor_bayer_config(struct msm_sensor_ctrl_t *s_ctrl,
 		cam_vreg = kzalloc(vreg_setting.num_vreg * sizeof(
 			struct camera_vreg_t),
 			GFP_KERNEL);
-		if (!cam_vreg) {
+		if (ZERO_OR_NULL_PTR(cam_vreg)) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
@@ -304,6 +324,15 @@ int32_t msm_sensor_bayer_config(struct msm_sensor_ctrl_t *s_ctrl,
 			sizeof(struct msm_camera_vreg_setting))) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
+			break;
+		}
+
+		if (clk_setting.num_clk_info >
+			ARRAY_SIZE(s_ctrl->cam_clk)) {
+			pr_err("%s:%d num_clk_info %d exceeds maximum",
+					__func__, __LINE__,
+					clk_setting.num_clk_info);
+			rc = -EINVAL;
 			break;
 		}
 

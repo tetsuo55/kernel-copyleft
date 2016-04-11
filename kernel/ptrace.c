@@ -254,7 +254,8 @@ ok:
 	smp_rmb();
 	if (task->mm)
 		dumpable = get_dumpable(task->mm);
-	if (!dumpable  && !ptrace_has_cap(task_user_ns(task), mode))
+	if (dumpable != SUID_DUMP_USER &&
+	    !ptrace_has_cap(task_user_ns(task), mode))
 		return -EPERM;
 
 	return security_ptrace_access_check(task, mode);
@@ -767,7 +768,7 @@ int ptrace_request(struct task_struct *child, long request,
 		 * tracee into STOP.
 		 */
 		if (likely(task_set_jobctl_pending(child, JOBCTL_TRAP_STOP)))
-			ptrace_signal_wake_up(child, child->jobctl &
+			ptrace_signal_wake_up(child, child->jobctl & JOBCTL_LISTENING);
 			JOBCTL_LISTENING);
 
 		unlock_task_sighand(child, &flags);

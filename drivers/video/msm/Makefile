@@ -9,6 +9,9 @@ ifeq ($(CONFIG_FB_MSM_MDP_HW),y)
 # MDP
 obj-y += mdp.o
 
+# MDP Arbitrator
+obj-$(CONFIG_FB_MSM_MDP_ARB) += mdp_arb.o
+
 obj-$(CONFIG_DEBUG_FS) += mdp_debugfs.o
 
 ifeq ($(CONFIG_FB_MSM_MDP40),y)
@@ -43,6 +46,7 @@ obj-y += mdp4_dtv.o
 obj-y += mdp4_overlay_dtv.o
 endif
 
+obj-$(CONFIG_MSM_DBA) += msm_dba/
 obj-y += mdp_dma.o
 obj-y += mdp_dma_s.o
 obj-y += mdp_vsync.o
@@ -83,10 +87,10 @@ obj-$(CONFIG_FB_MSM_MIPI_DSI_NT35510) += mipi_NT35510.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_NT35516) += mipi_truly_tft540960_1_e.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_NT35590) += mipi_NT35590.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_SIMULATOR) += mipi_simulator.o
-obj-$(CONFIG_FB_MSM_MIPI_DSI) += mipi_dsi_panel_driver.o
-ifeq ($(CONFIG_DEBUG_FS),y)
-obj-$(CONFIG_FB_MSM_MIPI_DSI) += mipi_dsi_panel_debugfs.o
-endif
+obj-$(CONFIG_FB_MSM_MIPI_DSI_I2C) += mipi_dsi_i2c.o
+
+# ADV7533
+obj-y += adv7533.o
 obj-$(CONFIG_FB_MSM_MIPI_R63306_SHARP_LS043K3SX04) += mipi_dsi_panel_r63306_sharp_ls043k3sx04.o
 obj-$(CONFIG_FB_MSM_MIPI_R63306_SHARP_LS046K3SX01) += mipi_dsi_panel_r63306_sharp_ls046k3sx01.o
 obj-$(CONFIG_FB_MSM_MIPI_R63311_SHARP_LS050T3SX02) += mipi_dsi_panel_r63311_sharp_ls050t3sx02.o
@@ -182,12 +186,16 @@ obj-$(CONFIG_FB_MSM_LCDC_AUO_WVGA) += lcdc_auo_wvga.o
 obj-$(CONFIG_FB_MSM_LCDC_SAMSUNG_OLED_PT) += lcdc_samsung_oled_pt.o
 obj-$(CONFIG_FB_MSM_HDMI_ADV7520_PANEL) += adv7520.o
 obj-$(CONFIG_FB_MSM_LCDC_ST15_WXGA) += lcdc_st15.o
+obj-$(CONFIG_FB_MSM_LVDS_FPDL3_WXGA) += lvds_fpdl3_wxga.o
 obj-$(CONFIG_FB_MSM_LVDS_FRC_FHD) += lvds_frc_fhd.o
 obj-$(CONFIG_FB_MSM_LOGO) += logo.o
 obj-$(CONFIG_FB_MSM_HDMI_MSM_PANEL) += hdmi_msm.o
 obj-$(CONFIG_FB_MSM_MHL_SII8334) += mhl_sii8334.o
 obj-$(CONFIG_FB_MSM_EXT_INTERFACE_COMMON) += external_common.o
 obj-$(CONFIG_FB_MSM_LCDC_TRULY_HVGA_IPS3P2335) += lcdc_truly_ips3p2335.o
+
+obj-$(CONFIG_FB_MSM_MIPI_DSI_I2C) += mipi_dsi_i2c_video_wvga.o
+obj-$(CONFIG_FB_MSM_MIPI_DSI_I2C) += mipi_dsi_i2c_video_xga.o
 
 obj-$(CONFIG_FB_MSM_TVOUT) += tvout_msm.o
 
@@ -201,6 +209,9 @@ obj-$(CONFIG_FB_MSM_EXTMDDI_SVGA) += mddi_ext_lcd.o
 obj-$(CONFIG_FB_MSM_WRITEBACK_MSM_PANEL) += mdp4_wfd_writeback_panel.o
 obj-$(CONFIG_FB_MSM_WRITEBACK_MSM_PANEL) += mdp4_wfd_writeback.o
 obj-$(CONFIG_FB_MSM_WRITEBACK_MSM_PANEL) += mdp4_overlay_writeback.o
+
+obj-$(CONFIG_FB_MSM_DMA_S_PANEL) += mdp4_dma_s_panel.o
+
 else
 obj-$(CONFIG_FB_MSM_EBI2) += ebi2_host.o
 obj-$(CONFIG_FB_MSM_EBI2) += ebi2_lcd.o

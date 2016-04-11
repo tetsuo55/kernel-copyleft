@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, 2016, The Linux Foundation. All rights
+ * reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -199,7 +200,7 @@ struct pm8921_charger_platform_data {
 	unsigned int			safety_time;
 	bool				disable_chg_rmvl_wrkarnd;
 	bool				enable_tcxo_warmup_delay;
-	int				soc_scaling;
+	bool				disable_charger;
 };
 
 enum pm8921_charger_source {

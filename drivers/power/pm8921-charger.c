@@ -1,5 +1,5 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
- * Copyright (C) 2012-2013, Sony Mobile Communications AB.
+/* Copyright (c) 2011-2013, 2016, The Linux Foundation. All rights
+ * reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -4907,18 +4907,18 @@ static void detect_battery_removal(struct pm8921_chg_chip *chip)
 		pm8921_bms_invalidate_shutdown_soc();
 }
 
-#define VBATDET_LOW_IN_BLOCK 0x01
-#define VBATDET_LOW_PERM_MARK BIT(4)
-static int pm_chg_set_irq_perm_user(struct pm8921_chg_chip *chip,
-					int block, int mark, int value)
+static int __devinit pm8921_chg_hw_deinit(struct pm8921_chg_chip *chip)
 {
 	int rc;
 
-	rc = pm_chg_write(chip, CHG_BLOCK_SELECT, block);
-	if (rc) {
-		pr_err("Failed to select block[%d] rc = %d\n", block, rc);
-		return rc;
-	}
+	rc = pm8921_chg_set_lpm(chip, 1);
+	if (rc)
+		pr_err("Failed to set lpm rc=%d\n", rc);
+
+	pm8921_chg_set_hw_clk_switching(chip);
+
+	return rc;
+}
 
 	rc = pm_chg_masked_write(chip, IRQ_BIT_PERM_USR, mark, value);
 	if (rc) {
@@ -4938,6 +4938,7 @@ static int pm_chg_set_irq_perm_user(struct pm8921_chg_chip *chip,
 #define PM_SUB_REV		0x001
 #define MIN_CHARGE_CURRENT_MA	350
 #define DEFAULT_SAFETY_MINUTES	500
+
 static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 {
 	u8 subrev;
@@ -5729,6 +5730,7 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+
 	chip->dev = &pdev->dev;
 	chip->ttrkl_time = pdata->ttrkl_time;
 	chip->update_time = pdata->update_time;
@@ -5807,8 +5809,16 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 					chip->max_bat_chg_current);
 
 	chip->voter = msm_xo_get(MSM_XO_TCXO_D0, "pm8921_charger");
-	spin_lock_init(&chip->chg_disable_lock);
-	spin_lock_init(&chip->chg_plug_debounce.lock);
+
+	if (pdata->disable_charger) {
+		rc = pm8921_chg_hw_deinit(chip);
+		if (rc)
+			pr_err("couldn't deinit hardware rc = %d\n", rc);
+
+		rc = -ENODEV;
+
+		goto free_chip;
+	}
 
 	rc = pm8921_chg_hw_init(chip);
 	if (rc) {

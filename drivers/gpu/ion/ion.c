@@ -2,7 +2,8 @@
  * drivers/gpu/ion/ion.c
  *
  * Copyright (C) 2011 Google, Inc.
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012, 2014, 2016, The Linux Foundation. All rights
+ * reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -607,8 +608,10 @@ static struct ion_iommu_map *__ion_iommu_map(struct ion_buffer *buffer,
 						iova_length,
 						flags);
 
-	if (ret)
+	if (ret) {
+		pr_err("%s,%d map_iommu failed=%d\n", __func__, __LINE__, ret);
 		goto out;
+	}
 
 	kref_init(&data->ref);
 	*iova = data->iova_addr;
@@ -663,21 +666,21 @@ int ion_map_iommu(struct ion_client *client, struct ion_handle *handle,
 		iova_length = buffer->size;
 
 	if (buffer->size > iova_length) {
-		pr_debug("%s: iova length %lx is not at least buffer size"
+		pr_err("%s: iova length %lx is not at least buffer size"
 			" %x\n", __func__, iova_length, buffer->size);
 		ret = -EINVAL;
 		goto out;
 	}
 
 	if (buffer->size & ~PAGE_MASK) {
-		pr_debug("%s: buffer size %x is not aligned to %lx", __func__,
+		pr_err("%s: buffer size %x is not aligned to %lx", __func__,
 			buffer->size, PAGE_SIZE);
 		ret = -EINVAL;
 		goto out;
 	}
 
 	if (iova_length & ~PAGE_MASK) {
-		pr_debug("%s: iova_length %lx is not aligned to %lx", __func__,
+		pr_err("%s: iova_length %lx is not aligned to %lx", __func__,
 			iova_length, PAGE_SIZE);
 		ret = -EINVAL;
 		goto out;
@@ -692,6 +695,10 @@ int ion_map_iommu(struct ion_client *client, struct ion_handle *handle,
 
 			if (iommu_map->flags & ION_IOMMU_UNMAP_DELAYED)
 				kref_get(&iommu_map->ref);
+		} else {
+			ret = PTR_ERR(iommu_map);
+			pr_err("%s: __ion_iommu_map failed=%d, length %lx\n",
+				__func__, ret, iova_length);
 		}
 	} else {
 		if (iommu_map->flags != iommu_flags) {
@@ -1237,19 +1244,19 @@ static int ion_share_set_flags(struct ion_client *client,
 }
 
 
-int ion_share_dma_buf(struct ion_client *client, struct ion_handle *handle)
+struct dma_buf *ion_share_dma_buf(struct ion_client *client,
+						struct ion_handle *handle)
 {
 	struct ion_buffer *buffer;
 	struct dma_buf *dmabuf;
 	bool valid_handle;
-	int fd;
 
 	mutex_lock(&client->lock);
 	valid_handle = ion_handle_validate(client, handle);
 	mutex_unlock(&client->lock);
 	if (!valid_handle) {
 		WARN(1, "%s: invalid handle passed to share.\n", __func__);
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	buffer = handle->buffer;
@@ -1257,31 +1264,40 @@ int ion_share_dma_buf(struct ion_client *client, struct ion_handle *handle)
 	dmabuf = dma_buf_export(buffer, &dma_buf_ops, buffer->size, O_RDWR);
 	if (IS_ERR(dmabuf)) {
 		ion_buffer_put(buffer);
-		return PTR_ERR(dmabuf);
+		return dmabuf;
 	}
+
+	return dmabuf;
+}
+EXPORT_SYMBOL(ion_share_dma_buf);
+
+int ion_share_dma_buf_fd(struct ion_client *client, struct ion_handle *handle)
+{
+	struct dma_buf *dmabuf;
+	int fd;
+
+	dmabuf = ion_share_dma_buf(client, handle);
+	if (IS_ERR(dmabuf))
+		return PTR_ERR(dmabuf);
+
 	fd = dma_buf_fd(dmabuf, O_CLOEXEC);
 	if (fd < 0)
 		dma_buf_put(dmabuf);
 
 	return fd;
 }
-EXPORT_SYMBOL(ion_share_dma_buf);
+EXPORT_SYMBOL(ion_share_dma_buf_fd);
 
-struct ion_handle *ion_import_dma_buf(struct ion_client *client, int fd)
+struct ion_handle *ion_dma_buf_to_handle(struct ion_client *client,
+					 struct dma_buf *dmabuf)
 {
-	struct dma_buf *dmabuf;
 	struct ion_buffer *buffer;
 	struct ion_handle *handle;
 
-	dmabuf = dma_buf_get(fd);
-	if (IS_ERR_OR_NULL(dmabuf))
-		return ERR_PTR(PTR_ERR(dmabuf));
 	/* if this memory came from ion */
-
 	if (dmabuf->ops != &dma_buf_ops) {
 		pr_err("%s: can not import dmabuf from another exporter\n",
 		       __func__);
-		dma_buf_put(dmabuf);
 		return ERR_PTR(-EINVAL);
 	}
 	buffer = dmabuf->priv;
@@ -1299,6 +1315,21 @@ struct ion_handle *ion_import_dma_buf(struct ion_client *client, int fd)
 	ion_handle_add(client, handle);
 end:
 	mutex_unlock(&client->lock);
+	return handle;
+
+}
+EXPORT_SYMBOL(ion_dma_buf_to_handle);
+
+struct ion_handle *ion_import_dma_buf(struct ion_client *client, int fd)
+{
+	struct dma_buf *dmabuf;
+	struct ion_handle *handle;
+
+	dmabuf = dma_buf_get(fd);
+	if (IS_ERR_OR_NULL(dmabuf))
+		return ERR_PTR(PTR_ERR(dmabuf));
+
+	handle = ion_dma_buf_to_handle(client, dmabuf);
 	dma_buf_put(dmabuf);
 	return handle;
 }
@@ -1355,7 +1386,8 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (ret)
 			return ret;
 
-		data.fd = ion_share_dma_buf(client, data.handle);
+		data.fd = ion_share_dma_buf_fd(client, data.handle);
+
 		if (copy_to_user((void __user *)arg, &data, sizeof(data)))
 			return -EFAULT;
 		if (data.fd < 0)

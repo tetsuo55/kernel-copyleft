@@ -730,4 +730,25 @@ config INPUT_BMP180
 	  Say Y here if you want support for the BMP180 pressure
 	  device. This driver only supports I2C communication.
 
+config LSM330_ACCEL
+	tristate "STM LSM330 acceleration sensor support"
+	depends on I2C=y
+	help
+	 If you say yes here you get support for STMicroelectronics's
+	 acceleration sensors LSM330.
+
+config LSM330_GYRO
+        tristate "STM LSM330 acceleration sensor support"
+        depends on I2C=y
+        help
+          If you say yes here you get support for STMicroelectronics's
+          gyroscope sensors LSM330.
+
+config LSM303_ACC
+        tristate "STM LSM303 acceleration sensor support"
+        depends on I2C=y
+        help
+          If you say yes here you get support for STMicroelectronics's
+          acceleration sensors LSM303.
+
 endif

@@ -14,7 +14,7 @@
 #include <linux/falloc.h>
 #include <linux/sched.h>
 #include <linux/ksm.h>
-#include <linux/fs.h>
+#include <linux/file.h>
 #include <linux/file.h>
 
 /*
@@ -225,7 +225,7 @@ static long madvise_remove(struct vm_area_struct *vma,
 			+ ((loff_t)vma->vm_pgoff << PAGE_SHIFT);
 
 	/*
-	 * Filesystem's fallocate may need to take i_mutex.  We need to
+	 * vmtruncate_range may need to take i_mutex.  We need to
 	 * explicitly grab a reference because the vma (and hence the
 	 * vma's reference to the file) can go away as soon as we drop
 	 * mmap_sem.
@@ -233,7 +233,7 @@ static long madvise_remove(struct vm_area_struct *vma,
 	get_file(f);
 	up_read(&current->mm->mmap_sem);
 	error = do_fallocate(f,
-				FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
+	fput(f);
 				offset, end - start);
 	fput(f);
 	down_read(&current->mm->mmap_sem);

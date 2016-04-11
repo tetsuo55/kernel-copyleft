@@ -1,5 +1,5 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
- * Copyright (C) 2013 Sony Mobile Communications AB.
+/* Copyright (c) 2011-2013, 2015-2016, The Linux Foundation.
+ * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -67,11 +67,13 @@ static int msm_vb2_ops_queue_setup(struct vb2_queue *vq,
 
 static void msm_vb2_ops_wait_prepare(struct vb2_queue *q)
 {
-	/* we use polling so do not use this fn now */
+	struct msm_cam_v4l2_dev_inst *pcam_inst = vb2_get_drv_priv(q);
+	mutex_unlock(&pcam_inst->inst_lock);
 }
 static void msm_vb2_ops_wait_finish(struct vb2_queue *q)
 {
-	/* we use polling so do not use this fn now */
+	struct msm_cam_v4l2_dev_inst *pcam_inst = vb2_get_drv_priv(q);
+	mutex_lock(&pcam_inst->inst_lock);
 }
 
 static int msm_vb2_ops_buf_init(struct vb2_buffer *vb)
@@ -291,7 +293,46 @@ static int msm_vb2_ops_start_streaming(struct vb2_queue *q, unsigned int count)
 
 static int msm_vb2_ops_stop_streaming(struct vb2_queue *q)
 {
-	return 0;
+	struct msm_cam_v4l2_dev_inst *pcam_inst = NULL;
+	unsigned long flags = 0;
+	struct msm_frame_buffer *buf, *tmp;
+	int rc = 0;
+
+	D("%s\n", __func__);
+	if (NULL == q) {
+		pr_err("%s error : input is NULL\n", __func__);
+		return -EINVAL;
+	}
+	pcam_inst = vb2_get_drv_priv(q);
+
+	if (NULL == pcam_inst) {
+		pr_err("%s error : pcam_inst is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	D("%s pcam_inst=%p\n", __func__, pcam_inst);
+	spin_lock_irqsave(&pcam_inst->vq_irqlock, flags);
+
+	list_for_each_entry_safe(buf, tmp,
+			&pcam_inst->free_vq, list) {
+
+		if (buf == NULL) {
+			D("%s Inst %p NULL buffer ptr",
+				__func__, pcam_inst);
+			break;
+		}
+
+		D("%s buf state %d idx %d\n", __func__,
+			buf->state, buf->vidbuf.v4l2_buf.index);
+		list_del_init(&buf->list);
+		buf->state = MSM_BUFFER_STATE_UNUSED;
+	}
+
+	/*Empty free q */
+	INIT_LIST_HEAD(&pcam_inst->free_vq);
+
+	spin_unlock_irqrestore(&pcam_inst->vq_irqlock, flags);
+	return rc;
 }
 
 static void msm_vb2_ops_buf_queue(struct vb2_buffer *vb)
@@ -362,6 +403,7 @@ int msm_mctl_img_mode_to_inst_index(struct msm_cam_media_controller *pmctl,
 		return pmctl->pcam_ptr->
 				mctl_node.dev_inst_map[image_mode]->my_index;
 	else if ((image_mode >= 0) &&
+		image_mode < ARRAY_SIZE(pmctl->pcam_ptr->dev_inst_map) &&
 		pmctl->pcam_ptr->dev_inst_map[image_mode])
 		return	pmctl->pcam_ptr->
 				dev_inst_map[image_mode]->my_index;
@@ -873,9 +915,9 @@ int msm_mctl_buf_done_pp(struct msm_cam_media_controller *pmctl,
 
 	if (buf_handle->buf_lookup_type == BUF_LOOKUP_BY_INST_HANDLE) {
 		idx = GET_MCTLPP_INST_IDX(buf_handle->inst_handle);
-		if (idx > MSM_DEV_INST_MAX) {
+		if (idx >= MSM_DEV_INST_MAX) {
 			idx = GET_VIDEO_INST_IDX(buf_handle->inst_handle);
-			BUG_ON(idx > MSM_DEV_INST_MAX);
+			BUG_ON(idx >= MSM_DEV_INST_MAX);
 			pcam_inst = pmctl->pcam_ptr->dev_inst[idx];
 		} else {
 			pcam_inst = pmctl->pcam_ptr->mctl_node.dev_inst[idx];
@@ -921,6 +963,12 @@ int msm_mctl_buf_return_buf(struct msm_cam_media_controller *pmctl,
 	struct msm_cam_v4l2_dev_inst *pcam_inst;
 	struct msm_cam_v4l2_device *pcam = pmctl->pcam_ptr;
 	unsigned long flags = 0;
+
+	if (image_mode < 0 || image_mode >= MSM_MAX_IMG_MODE) {
+		pr_err("%s: image_mode %d out-of-bounds",
+				__func__, image_mode);
+		return -EINVAL;
+	}
 
 	if (pcam->mctl_node.dev_inst_map[image_mode]) {
 		idx = pcam->mctl_node.dev_inst_map[image_mode]->my_index;
@@ -1015,6 +1063,8 @@ static int __msm_mctl_map_user_frame(struct msm_cam_meta_frame *meta_frame,
 
 		/* Validate the offsets with the mapped length. */
 		if ((meta_frame->frame.mp[i].addr_offset > len) ||
+			(meta_frame->frame.mp[i].data_offset > UINT_MAX -
+			meta_frame->frame.mp[i].length) ||
 			(meta_frame->frame.mp[i].data_offset +
 			meta_frame->frame.mp[i].length > len)) {
 			pr_err("%s: Invalid offsets A %d D %d L %d len %ld",

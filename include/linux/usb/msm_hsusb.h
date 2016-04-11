@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Author: Brian Swetland <swetland@google.com>
- * Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2012, 2014, 2016 The Linux Foundation. All rights reserved.
  * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -206,7 +206,7 @@ enum usb_vdd_value {
  *              USB enters LPM.
  * @bus_scale_table: parameters for bus bandwidth requirements
  * @mhl_dev_name: MHL device name used to register with MHL driver.
- * @chg_drawable_ida: Drawable current value when ID_A.
+ * @mpm_xo_wakeup_int: MPM to KRAIT interrupt for remote wakeup
  */
 struct msm_otg_platform_data {
 	int *phy_init_seq;
@@ -226,8 +226,21 @@ struct msm_otg_platform_data {
 	bool core_clk_always_on_workaround;
 	struct msm_bus_scale_pdata *bus_scale_table;
 	const char *mhl_dev_name;
-	unsigned chg_drawable_ida;
+	bool ignore_wakeup_source;
+	unsigned int mpm_xo_wakeup_int;
+	bool allow_host_vdd_min_wo_rework;
+	bool is_ext_hub;
+	int hub_rst_gpio;
+	int hub_vdd_gpio;
+	int hub_vbus_en_gpio;
+	int hub_vbus_ok_gpio;
+	int hub_vbus_ok_gpio_irq;
+	int flex_en_gpio;
+	int flex_out_gpio;
 };
+
+/* phy related flags */
+#define ENABLE_DP_MANUAL_PULLUP	BIT(0)
 
 /* Timeout (in msec) values (min - max) associated with OTG timers */
 
@@ -273,6 +286,11 @@ struct msm_otg_platform_data {
  * struct msm_otg: OTG driver data. Shared by HCD and DCD.
  * @otg: USB OTG Transceiver structure.
  * @pdata: otg device platform data.
+ * @hub_udev: HUB device pointer.
+ * @flex_device_udev: Bridge device usb device pointer.
+ *                    Useful for flexconnect.
+ * @test_port_num: port number of the hub to test.
+ * @test_mode: test packet mode to generate test signals.
  * @irq: IRQ number assigned for HSUSB controller.
  * @async_irq: IRQ number used by some controllers during low power state
  * @clk: clock struct of alt_core_clk.
@@ -307,12 +325,22 @@ struct msm_otg_platform_data {
 struct msm_otg {
 	struct usb_phy phy;
 	struct msm_otg_platform_data *pdata;
+	struct usb_device *hub_udev;
+	struct usb_device *flex_device_udev;
+	int test_port_num;
+	int test_mode;
 	int irq;
 	int async_irq;
 	struct clk *clk;
 	struct clk *pclk;
 	struct clk *phy_reset_clk;
 	struct clk *core_clk;
+	/* usb Regulators */
+	struct regulator *hsusb_3p3;
+	struct regulator *hsusb_1p8;
+	struct regulator *hsusb_vddcx;
+	struct regulator *vbus_otg;
+	struct regulator *mhl_usb_hs_switch;
 	void __iomem *regs;
 #define ID		0
 #define B_SESS_VLD	1
@@ -343,6 +371,7 @@ struct msm_otg {
 	struct delayed_work chg_work;
 	struct delayed_work pmic_id_status_work;
 	struct delayed_work check_ta_work;
+	struct delayed_work restart_host_work;
 	enum usb_chg_state chg_state;
 	enum usb_chg_type chg_type;
 	unsigned dcd_time;
@@ -375,6 +404,15 @@ struct msm_otg {
 	   * USB bus is suspended but cable is connected.
 	   */
 #define ALLOW_LPM_ON_DEV_SUSPEND	    BIT(2)
+	/*
+	 * Allow XO shutdown in host bus suspend if MPM to KRAIT
+	 * interrupt pin is available.
+	 */
+#define ALLOW_XO_SHUTDOWN		BIT(3)
+	/*
+	 * Allow PHY_RETENTION in HOST mode
+	 */
+#define ALLOW_HOST_MODE_PHY_RETENTION	BIT(4)
 	unsigned long lpm_flags;
 #define PHY_PWR_COLLAPSED		BIT(0)
 #define PHY_RETENTIONED			BIT(1)
@@ -386,7 +424,16 @@ struct msm_otg {
 	u8 active_tmout;
 	struct hrtimer timer;
 	enum usb_vdd_type vdd_type;
-	struct workqueue_struct *wq;
+	struct power_supply *psy;
+	struct dentry *msm_otg_dbg_root;
+	struct completion pmic_vbus_init;
+	bool debug_bus_voting_enabled;
+	bool mhl_det_in_progress;
+	bool keep_vbus;
+	bool vbus_is_on;
+	bool debug_aca_enabled;
+	bool aca_id_turned_on;
+
 };
 
 struct msm_hsic_host_platform_data {
@@ -401,6 +448,7 @@ struct msm_usb_host_platform_data {
 	unsigned int power_budget;
 	int pmic_gpio_dp_irq;
 	unsigned int dock_connect_irq;
+	bool allow_host_vdd_min_wo_rework;
 };
 
 /**
@@ -459,6 +507,9 @@ enum usb_bam {
 	HSUSB_BAM = 0,
 	HSIC_BAM,
 };
+
+/* for usb host controller driver */
+extern struct usb_phy *msm_usb_get_transceiver(int);
 
 void msm_otg_notify_vbus_drop(void);
 
