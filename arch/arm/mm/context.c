@@ -45,26 +45,38 @@ static DEFINE_PER_CPU(u64, active_asids);
 static DEFINE_PER_CPU(u64, reserved_asids);
 static cpumask_t tlb_flush_pending;
 
-#ifdef CONFIG_SMP
-DEFINE_PER_CPU(struct mm_struct *, current_mm);
-#endif
 
 #ifdef CONFIG_ARM_LPAE
-#define cpu_set_asid(asid) {						\
-	unsigned long ttbl, ttbh;					\
-	asm volatile(							\
-	"	mrrc	p15, 0, %0, %1, c2		@ read TTBR0\n"	\
-	"	mov	%1, %2, lsl #(48 - 32)		@ set ASID\n"	\
-	"	mcrr	p15, 0, %0, %1, c2		@ set TTBR0\n"	\
-	: "=&r" (ttbl), "=&r" (ttbh)					\
-	: "r" (asid & ~ASID_MASK));					\
+void cpu_set_reserved_ttbr0(void)
+{
+	unsigned long ttbl = __pa(swapper_pg_dir);
+	unsigned long ttbh = 0;
+
+	/*
+	 * Set TTBR0 to swapper_pg_dir which contains only global entries. The
+	 * ASID is set to 0.
+	 */
+	asm volatile(
+	"	mcrr	p15, 0, %0, %1, c2		@ set TTBR0\n"
+	:
+	: "r" (ttbl), "r" (ttbh));
+	isb();
 }
 #else
-#define cpu_set_asid(asid) \
-	asm("	mcr	p15, 0, %0, c13, c0, 1\n" : : "r" (asid))
+void cpu_set_reserved_ttbr0(void)
+{
+	u32 ttb;
+	/* Copy TTBR1 into TTBR0 */
+	asm volatile(
+	"	mrc	p15, 0, %0, c2, c0, 1		@ read TTBR1\n"
+	"	mcr	p15, 0, %0, c2, c0, 0		@ set TTBR0\n"
+	: "=r" (ttb));
+	isb();
+}
 #endif
 
 static void write_contextidr(u32 contextidr)
+ * to run in.
 {
 	uncached_logk(LOGK_CTXID, (void *)contextidr);
 	asm("mcr	p15, 0, %0, c13, c0, 1" : : "r" (contextidr));
@@ -73,9 +85,7 @@ static void write_contextidr(u32 contextidr)
 
 static u32 read_contextidr(void)
 {
-	u32 contextidr;
-	asm("mrc	p15, 0, %0, c13, c0, 1" : "=r" (contextidr));
-	return contextidr;
+	cpu_set_reserved_ttbr0();
 }
 
 static int contextidr_notifier(struct notifier_block *unused, unsigned long cmd,
@@ -108,11 +118,7 @@ static int __init contextidr_notifier_init(void)
 {
 	return thread_register_notifier(&contextidr_notifier_block);
 }
-arch_initcall(contextidr_notifier_init);
-
-static void flush_context(unsigned int cpu)
-{
-	int i;
+	struct mm_struct *mm = current->active_mm;
 
 	/* Update the list of reserved ASIDs. */
 	per_cpu(active_asids, cpu) = 0;
@@ -126,7 +132,7 @@ static void flush_context(unsigned int cpu)
 		cpumask_setall(&tlb_flush_pending);
 
 	if (icache_is_vivt_asid_tagged())
-		__flush_icache_all();
+	cpu_switch_mm(mm->pgd, mm);
 }
 
 static int is_reserved_asid(u64 asid, u64 mask)

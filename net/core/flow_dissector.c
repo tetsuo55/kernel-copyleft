@@ -36,6 +36,8 @@ again:
 ip:
 		iph = skb_header_pointer(skb, nhoff, sizeof(_iph), &_iph);
 		if (!iph || iph->ihl < 5)
+		/* CVE-2013-4348 issue : make sure iph->ihl is not zero ... */
+		if (!iph || iph->ihl < 5)
 			return false;
 
 		if (ip_is_fragment(iph))

@@ -1244,5 +1244,7 @@ err:
 int sdio_reset_comm(struct mmc_card *card)
 {
 	return mmc_power_restore_host(card->host);
+	err = mmc_sdio_init_card(host, host->ocr, card, 0);
+	if (err)
 }
 EXPORT_SYMBOL(sdio_reset_comm);

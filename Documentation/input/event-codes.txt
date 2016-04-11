@@ -92,9 +92,13 @@ sent in the evdev event stream.
     current state.
 
 * SYN_TIME_SEC, SYN_TIME_NSEC:
-  - Used to report the timestamp from the hardware. The timestamp should record
-    the exact time when the hardware events happens. The timestamp is
-    CLOCK_MONOTONIC based.
+  - Used to convey hardware timestamp associated with the current
+    event packet. The use of these event codes by hardware drivers
+    is optional. If used, the hardware driver should send the timestamp
+    ahead of any other events associated with this packet. The timestamp
+    should be adjusted to CLOCK_MONOTONIC base.
+    This becomes useful for drivers of hardware that handle batching
+    without involving the main CPU.
 
 EV_KEY:
 ----------

@@ -43,6 +43,17 @@ extern void thaw_processes(void);
 extern void thaw_kernel_threads(void);
 
 /*
+ * HACK: prevent sleeping while atomic warnings due to ARM signal handling
+ * disabling irqs
+ */
+static inline bool try_to_freeze_nowarn(void)
+{
+	if (likely(!freezing(current)))
+		return false;
+	return __refrigerator(false);
+}
+
+/*
  * DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION
  * If try_to_freeze causes a lockdep warning it means the caller may deadlock
  */
@@ -65,6 +76,13 @@ static inline bool try_to_freeze_nowarn(void)
 	if (likely(!freezing(current)))
 		return false;
 	return __refrigerator(false);
+}
+
+static inline bool try_to_freeze(void)
+{
+	if (!(current->flags & PF_NOFREEZE))
+		debug_check_no_locks_held();
+	return try_to_freeze_unsafe();
 }
 
 static inline bool try_to_freeze(void)
@@ -133,6 +151,14 @@ static inline void freezer_count(void)
 	 */
 	smp_mb();
 	try_to_freeze();
+}
+
+/* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */
+static inline void freezer_count_unsafe(void)
+{
+	current->flags &= ~PF_FREEZER_SKIP;
+	smp_mb();
+	try_to_freeze_unsafe();
 }
 
 /**
@@ -290,6 +316,12 @@ static inline int freezable_schedule_hrtimeout_range(ktime_t *expires,
 	__retval = wait_event_interruptible_timeout(wq,	(condition),	\
 				__retval);				\
 	freezer_count();						\
+#define wait_event_freezable_exclusive(wq, condition)			\
+({									\
+	int __retval;							\
+	freezer_do_not_count();						\
+	__retval = wait_event_interruptible_exclusive(wq, condition);	\
+	freezer_count();						\
 	__retval;							\
 })
 
@@ -314,6 +346,7 @@ static inline int freeze_kernel_threads(void) { return -ENOSYS; }
 static inline void thaw_processes(void) {}
 static inline void thaw_kernel_threads(void) {}
 
+static inline bool try_to_freeze_nowarn(void) { return false; }
 static inline bool try_to_freeze(void) { return false; }
 
 static inline void freezer_do_not_count(void) {}

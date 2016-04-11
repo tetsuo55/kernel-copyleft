@@ -85,13 +85,15 @@ int show_fiq_list(struct seq_file *p, int prec)
 void set_fiq_handler(void *start, unsigned int length)
 {
 	void *base = vectors_page;
+	void *base = (void *)0xffff0000;
+
+	void *base = vectors_page;
+	if (!cache_is_vipt_nonaliasing())
 	unsigned offset = FIQ_OFFSET;
 
 	memcpy(base + offset, start, length);
-	if (!cache_is_vipt_nonaliasing())
-		flush_icache_range((unsigned long)base + offset, offset +
-				   length);
 	flush_icache_range(0xffff0000 + offset, 0xffff0000 + offset + length);
+		flush_icache_range(offset, offset + length);
 }
 
 int claim_fiq(struct fiq_handler *f)

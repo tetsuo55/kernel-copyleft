@@ -468,6 +468,15 @@ static ssize_t wakeup_count_store(struct kobject *kobj,
 		goto out;
 	}
 
+	error = pm_autosleep_lock();
+	if (error)
+		return error;
+
+	if (pm_autosleep_state() > PM_SUSPEND_ON) {
+		error = -EBUSY;
+		goto out;
+	}
+
 	error = -EINVAL;
 	if (sscanf(buf, "%u", &val) == 1) {
 		if (pm_save_wakeup_count(val))
@@ -601,11 +610,6 @@ power_attr(pm_trace_dev_match);
 
 #endif /* CONFIG_PM_TRACE */
 
-#ifdef CONFIG_USER_WAKELOCK
-power_attr(wake_lock);
-power_attr(wake_unlock);
-#endif
-
 static struct attribute *g[] = {
 	&state_attr.attr,
 #ifdef CONFIG_PM_TRACE
@@ -624,12 +628,13 @@ static struct attribute *g[] = {
 #endif
 	&touch_event_attr.attr,
 	&touch_event_timer_attr.attr,
-#ifdef CONFIG_PM_DEBUG
-	&pm_test_attr.attr,
 #endif
-#ifdef CONFIG_USER_WAKELOCK
+#ifdef CONFIG_PM_WAKELOCKS
 	&wake_lock_attr.attr,
 	&wake_unlock_attr.attr,
+#endif
+#ifdef CONFIG_PM_DEBUG
+	&pm_test_attr.attr,
 #endif
 #endif
 	NULL,

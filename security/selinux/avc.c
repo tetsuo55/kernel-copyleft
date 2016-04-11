@@ -196,7 +196,7 @@ void __init avc_init(void)
 	atomic_set(&avc_cache.lru_hint, 0);
 
 	avc_node_cachep = kmem_cache_create("avc_node", sizeof(struct avc_node),
-					     0, SLAB_PANIC, NULL);
+					0, SLAB_PANIC, NULL);
 	avc_operation_node_cachep = kmem_cache_create("avc_operation_node",
 				sizeof(struct avc_operation_node),
 				0, SLAB_PANIC, NULL);
@@ -844,6 +844,7 @@ static inline int avc_operation_audit(u32 ssid, u32 tsid, u16 tclass,
 	return slow_avc_audit(ssid, tsid, tclass, requested,
 			      audited, denied, result, ad, 0);
 }
+
 
 /**
  * avc_audit - Audit the granting or denial of permissions.

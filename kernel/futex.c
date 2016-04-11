@@ -61,6 +61,7 @@
 #include <linux/nsproxy.h>
 #include <linux/ptrace.h>
 #include <linux/hugetlb.h>
+#include <linux/freezer.h>
 
 #include <asm/futex.h>
 
@@ -2465,9 +2466,9 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 	 * shared futexes. We need to compare the keys:
 	 */
 	if (match_futex(&q.key, &key2)) {
-		queue_unlock(&q, hb);
 		ret = -EINVAL;
 		goto out_put_keys;
+	}
 	}
 
 	/* Queue the futex_q, drop the hb lock, wait for wakeup. */

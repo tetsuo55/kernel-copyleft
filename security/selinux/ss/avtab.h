@@ -60,6 +60,21 @@ struct avtab_operation {
 	struct operation_perm op;
 };
 
+/* These are not flags. All 256 values may be used */
+#define AVTAB_XPERMS_IOCTLFUNCTION	0x01
+#define AVTAB_XPERMS_IOCTLDRIVER	0x02
+	/* extension of the avtab_key specified */
+	u8 specified; /* ioctl, netfilter, ... */
+	/*
+	 * if 256 bits is not adequate as is often the case with ioctls, then
+	 * multiple extended perms may be used and the driver field
+	 * specifies which permissions are included.
+	 */
+	u8 driver;
+	/* 256 bits of permissions */
+	struct extended_perms_data perms;
+};
+
 struct avtab_datum {
 	union {
 		u32 data; /* access vector or type value */
