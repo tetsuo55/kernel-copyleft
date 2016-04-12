@@ -35,6 +35,8 @@
 #include <asm/tls.h>
 #include <asm/system_misc.h>
 
+#include "signal.h"
+
 #include <trace/events/exception.h>
 
 static const char *handler[]= {
@@ -305,11 +307,10 @@ void die(const char *str, struct pt_regs *regs, int err)
 	struct thread_info *thread = current_thread_info();
 	int ret;
 	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
-	unsigned long flags = 0;
 
 	oops_enter();
 
-	raw_spin_lock_irqsave(&die_lock, flags);
+	raw_spin_lock_irq(&die_lock);
 	console_verbose();
 	bust_spinlocks(1);
 	if (!user_mode(regs))
@@ -323,7 +324,7 @@ void die(const char *str, struct pt_regs *regs, int err)
 
 	bust_spinlocks(0);
 	add_taint(TAINT_DIE);
-	raw_spin_unlock_irqrestore(&die_lock, flags);
+	raw_spin_unlock_irq(&die_lock);
 	oops_exit();
 
 	if (in_interrupt())
@@ -832,10 +833,6 @@ static void __init kuser_init(void *vectors)
 		memcpy(vectors + 0xfe0, vectors + 0xfe8, 4);
 }
 #else
-static void __init kuser_init(void *vectors)
-{
-}
-#endif
 static void __init kuser_init(void *vectors)
 {
 }
