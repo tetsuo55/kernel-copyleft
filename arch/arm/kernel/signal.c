@@ -21,6 +21,7 @@
 #include <asm/ucontext.h>
 #include <asm/unistd.h>
 #include <asm/vfp.h>
+
 #define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
 
 /*
@@ -99,8 +100,6 @@ sys_sigaction(int sig, const struct old_sigaction __user *act,
 
 	return ret;
 }
-
-static unsigned long signal_return_offset;
 
 #ifdef CONFIG_CRUNCH
 static int preserve_crunch_context(struct crunch_sigframe __user *frame)
@@ -462,7 +461,6 @@ setup_return(struct pt_regs *regs, struct k_sigaction *ka,
 
 			/*
 			 * 32-bit code can use the signal return page.
-			 * page from PL0
 			 */
 			retcode = mm->context.sigpage + signal_return_offset +
 				  (idx << 2) + thumb;
@@ -659,7 +657,6 @@ static int do_signal(struct pt_regs *regs, int syscall)
 				regs->ARM_r0 = -EINTR;
 				regs->ARM_pc = continue_addr;
 			}
-			clear_thread_flag(TIF_SYSCALL_RESTARTSYS);
 		}
 
 		if (test_thread_flag(TIF_RESTORE_SIGMASK))
@@ -723,35 +720,33 @@ do_work_pending(struct pt_regs *regs, unsigned int thread_flags, int syscall)
 	return 0;
 }
 
-static struct page *signal_page;
 
 struct page *get_signal_page(void)
 {
-	if (!signal_page) {
-		unsigned long ptr;
-		unsigned offset;
-		void *addr;
+	unsigned long ptr;
+	unsigned offset;
+	struct page *page;
+	void *addr;
 
-		signal_page = alloc_pages(GFP_KERNEL, 0);
+	page = alloc_pages(GFP_KERNEL, 0);
 
-		if (!signal_page)
-			return NULL;
+	if (!page)
+		return NULL;
 
-		addr = page_address(signal_page);
+	addr = page_address(page);
 
-		/* Give the signal return code some randomness */
-		offset = 0x200 + (get_random_int() & 0x7fc);
-		signal_return_offset = offset;
+	/* Give the signal return code some randomness */
+	offset = 0x200 + (get_random_int() & 0x7fc);
+	signal_return_offset = offset;
 
-		/*
-		 * Copy signal return handlers into the vector page, and
-		 * set sigreturn to be a pointer to these.
-		 */
-		memcpy(addr + offset, sigreturn_codes, sizeof(sigreturn_codes));
+	/*
+	 * Copy signal return handlers into the vector page, and
+	 * set sigreturn to be a pointer to these.
+	 */
+	memcpy(addr + offset, sigreturn_codes, sizeof(sigreturn_codes));
 
-		ptr = (unsigned long)addr + offset;
-		flush_icache_range(ptr, ptr + sizeof(sigreturn_codes));
-	}
+	ptr = (unsigned long)addr + offset;
+	flush_icache_range(ptr, ptr + sizeof(sigreturn_codes));
 
-	return signal_page;
+	return page;
 }
